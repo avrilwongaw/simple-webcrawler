@@ -2,6 +2,8 @@
 import sys
 import numpy as np
 
+from urllib.parse import urlparse
+
 # number of unique urls to download
 TARGET_URLS = 100
 
@@ -13,6 +15,11 @@ class SimpleWebCrawler:
         self.url_array = np.empty(shape=TARGET_URLS, dtype=str)
         self.urls_found = 0
         self.urls_searched = 0
+
+    @staticmethod
+    def is_url(cand_str):
+        parse_result = urlparse(cand_str)
+        return parse_result.scheme != "" and parse_result.netloc != ""
 
     def search(self):
         # start search from start_url
@@ -43,6 +50,9 @@ class SimpleWebCrawler:
 
 def main(url):
     # sanity check on input url
+    if not SimpleWebCrawler.is_url(url):
+        print("Invalid url given. Please try again with a valid url.")
+        sys.exit(-1)
 
     # run webcrawler
     wc = SimpleWebCrawler(url)
