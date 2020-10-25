@@ -14,12 +14,10 @@ from bs4 import BeautifulSoup, SoupStrainer
 
 
 # number of unique urls to download
-TARGET_URLS = 3
+TARGET_URLS = 100
 
+# temporary directory to store html files
 HTML_DIR = "htmls"
-
-# testing parameter
-DEBUG = False
 
 
 class SimpleWebCrawler:
@@ -100,7 +98,7 @@ class SimpleWebCrawler:
         return 0
 
     # Downloads html from url and returns BeautifulSoup object
-    # filtered to only contain <a> tags
+    # which is filtered to only contain <a> tags
     def get_html_link_soup(self, url):
         html_fp = self.get_html_fp(url)
 
@@ -116,10 +114,23 @@ class SimpleWebCrawler:
         soup = BeautifulSoup(site_content, 'html.parser', parse_only=SoupStrainer("a"))
         return soup
 
+    @staticmethod
+    def get_valid_urls(link_soup):
+        valid_urls = []
+        for link in link_soup:
+            if hasattr(link, 'href'):
+                try:
+                    url = link['href']
+                    if is_url(url):
+                        valid_urls.append(url)
+                except KeyError:
+                    # ignore this link
+                    continue
+        return valid_urls
+
     # get all unique links and store in url_array
     def find_urls(self, link_soup):
-        links = [link['href'] for link in link_soup
-                 if hasattr(link, 'href') and is_url(link['href'])]
+        links = self.get_valid_urls(link_soup)
         link_arr = np.array(links, dtype=object)
 
         # narrow list to unique links to be added to url_array
@@ -130,11 +141,11 @@ class SimpleWebCrawler:
         links_left = TARGET_URLS - self.urls_found
         links_found = get_np_arrlen(link_arr)
         if links_found <= links_left:
-            # all links can fit in the array
+            # all links can fit in url_array
             self.url_array[self.urls_found:self.urls_found + links_found] = link_arr
             self.urls_found += links_found
         else:
-            # fill the rest of the array
+            # fill the rest of url_array
             rem_links = link_arr[0:links_left]
             self.url_array[self.urls_found:] = rem_links
             self.urls_found = TARGET_URLS
@@ -162,15 +173,12 @@ def main(url):
 
     # run webcrawler
     wc = SimpleWebCrawler(url)
-    if DEBUG:
-        # stop execution here
-        sys.exit(0)
     wc.search()
 
     # print urls found
     print(f"Found {wc.urls_found} unique URLs:")
-    for found_url in wc.url_array:
-        print(found_url)
+    for i, found_url in enumerate(wc.url_array):
+        print(f"{i + 1}. {found_url}")
 
     wc.cleanup()
 
