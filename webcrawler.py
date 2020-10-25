@@ -1,12 +1,12 @@
 
-import sys
-import numpy as np
-
-from urllib.parse import urlparse
-from pathlib import Path
 import os
+import sys
 import shutil
+from pathlib import Path
+from urllib.parse import urlparse
+
 import tldextract
+import numpy as np
 from selenium import webdriver
 from selenium.webdriver.firefox.options import Options
 from selenium.common.exceptions import TimeoutException
