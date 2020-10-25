@@ -73,10 +73,12 @@ class SimpleWebCrawler:
             # search the next url in the list
             self.search_url(self.url_array[self.urls_searched])
 
+    # Returns a file path to store html for given url
     def get_html_fp(self, url):
         filename = f"{tldextract.extract(url).domain}-{self.urls_searched}.html"
         return self.html_dir / filename
 
+    # Downloads html from url and returns BeautifulSoup object
     def get_html_soup(self, url):
         html_fp = self.get_html_fp(url)
 
@@ -91,6 +93,8 @@ class SimpleWebCrawler:
         soup = BeautifulSoup(site_content, 'html.parser')
         return soup
 
+    # Downloads html from url to a file
+    # Returns negative int if download failed
     def download_html(self, url, html_fp):
         try:
             # open url
