@@ -1,0 +1,5 @@
+# Generated files
+__pycache__/
+
+# Editor
+.idea/
