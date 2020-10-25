@@ -10,23 +10,23 @@ import tldextract
 from selenium import webdriver
 from selenium.webdriver.firefox.options import Options
 from selenium.common.exceptions import TimeoutException
-from bs4 import BeautifulSoup
+from bs4 import BeautifulSoup, SoupStrainer
 
 
 # number of unique urls to download
-TARGET_URLS = 100
+TARGET_URLS = 3
 
 HTML_DIR = "htmls"
 
 # testing parameter
-DEBUG = True
+DEBUG = False
 
 
 class SimpleWebCrawler:
     def __init__(self, url):
         self.start_url = url
 
-        self.url_array = np.empty(shape=TARGET_URLS, dtype=str)
+        self.url_array = np.empty(shape=TARGET_URLS, dtype=object)
         self.urls_found = 0
         self.urls_searched = 0
 
@@ -41,57 +41,39 @@ class SimpleWebCrawler:
         self.driver = webdriver.Firefox(options=driver_options)
         self.driver.set_page_load_timeout(20)  # in seconds
 
-    @staticmethod
-    def is_url(cand_str):
-        parse_result = urlparse(cand_str)
-        return parse_result.scheme != "" and parse_result.netloc != ""
-
     def search(self):
         # start search from start_url
         self.search_url(self.start_url, inc_searched=False)
 
     def search_url(self, url_to_search, inc_searched=True):
-        soup = self.get_html_soup(url_to_search)
+        link_soup = self.get_html_link_soup(url_to_search)
 
-        if soup is None:
+        if link_soup is None:
             print("Stopped search")
             return
 
-        # get all hrefs and store in url_array
-        # update urls_found accordingly
-        # this function should break early if urls_found hits TARGET_URLS
+        # find all links in the soup
+        self.find_urls(link_soup)
 
-        # check if TARGET_URLS is hit
         if self.urls_found == TARGET_URLS:
             # stop search
             return
-        else:
-            # update pointer to next url to search
-            if inc_searched:
-                self.urls_searched += 1
 
-            # search the next url in the list
-            self.search_url(self.url_array[self.urls_searched])
+        # update pointer to next found url to search
+        if inc_searched:
+            self.urls_searched += 1
+
+        if self.urls_found == self.urls_searched:
+            print("Ran out of links to search from")
+            return
+
+        # search the next url in the list
+        self.search_url(self.url_array[self.urls_searched])
 
     # Returns a file path to store html for given url
     def get_html_fp(self, url):
         filename = f"{tldextract.extract(url).domain}-{self.urls_searched}.html"
         return self.html_dir / filename
-
-    # Downloads html from url and returns BeautifulSoup object
-    def get_html_soup(self, url):
-        html_fp = self.get_html_fp(url)
-
-        if self.download_html(url, html_fp) < 0:
-            # download failed
-            return None
-
-        # create bs object
-        with open(html_fp, 'r') as fp:
-            site_content = fp.read()
-
-        soup = BeautifulSoup(site_content, 'html.parser')
-        return soup
 
     # Downloads html from url to a file
     # Returns negative int if download failed
@@ -117,26 +99,76 @@ class SimpleWebCrawler:
 
         return 0
 
-    def find_urls_from_html(self, html):
-        pass
+    # Downloads html from url and returns BeautifulSoup object
+    # filtered to only contain <a> tags
+    def get_html_link_soup(self, url):
+        html_fp = self.get_html_fp(url)
+
+        if self.download_html(url, html_fp) < 0:
+            # download failed
+            return None
+
+        # create bs object
+        with open(html_fp, 'r') as fp:
+            site_content = fp.read()
+
+        # Only keep <a> tags
+        soup = BeautifulSoup(site_content, 'html.parser', parse_only=SoupStrainer("a"))
+        return soup
+
+    # get all unique links and store in url_array
+    def find_urls(self, link_soup):
+        links = [link['href'] for link in link_soup
+                 if hasattr(link, 'href') and is_url(link['href'])]
+        link_arr = np.array(links, dtype=object)
+
+        # narrow list to unique links to be added to url_array
+        link_arr = np.unique(link_arr)
+        # url_array must be unique
+        link_arr = np.setdiff1d(link_arr, self.url_array, assume_unique=True)
+
+        links_left = TARGET_URLS - self.urls_found
+        links_found = get_np_arrlen(link_arr)
+        if links_found <= links_left:
+            # all links can fit in the array
+            for link in link_arr:
+                self.url_array[self.urls_found] = link
+                self.urls_found += 1
+        else:
+            # fill the rest of the array
+            rem_links = link_arr[0:links_left - 1]
+            for link in rem_links:
+                print(link)
+                self.url_array[self.urls_found] = link
+                self.urls_found += 1
 
     def cleanup(self):
         self.driver.quit()
 
 
+# Returns the length of a single-row array
+def get_np_arrlen(arr):
+    return arr.shape[0]
+
+
+# Returns True if cand_str is a properly-formatted url
+def is_url(cand_str):
+    parse_result = urlparse(cand_str)
+    return parse_result.scheme != "" and parse_result.netloc != ""
+
+
 def main(url):
     # sanity check on input url
-    if not SimpleWebCrawler.is_url(url):
+    if not is_url(url):
         print("Invalid url given. Please try again with a valid url.")
         sys.exit(-1)
 
     # run webcrawler
     wc = SimpleWebCrawler(url)
-    wc.search()
-
     if DEBUG:
         # stop execution here
         sys.exit(0)
+    wc.search()
 
     # print urls found
     print(f"Found {wc.urls_found} unique URLs:")
