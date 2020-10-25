@@ -131,16 +131,13 @@ class SimpleWebCrawler:
         links_found = get_np_arrlen(link_arr)
         if links_found <= links_left:
             # all links can fit in the array
-            for link in link_arr:
-                self.url_array[self.urls_found] = link
-                self.urls_found += 1
+            self.url_array[self.urls_found:self.urls_found + links_found] = link_arr
+            self.urls_found += links_found
         else:
             # fill the rest of the array
-            rem_links = link_arr[0:links_left - 1]
-            for link in rem_links:
-                print(link)
-                self.url_array[self.urls_found] = link
-                self.urls_found += 1
+            rem_links = link_arr[0:links_left]
+            self.url_array[self.urls_found:] = rem_links
+            self.urls_found = TARGET_URLS
 
     def cleanup(self):
         self.driver.quit()
