@@ -46,23 +46,20 @@ class SimpleWebCrawler:
     def search_url(self, url_to_search, inc_searched=True):
         link_soup = self.get_html_link_soup(url_to_search)
 
-        if link_soup is None:
-            print("Stopped search")
-            return
+        if link_soup is not None:
+            # find all links in the soup
+            self.find_urls(link_soup)
 
-        # find all links in the soup
-        self.find_urls(link_soup)
-
-        if self.urls_found == TARGET_URLS:
-            # stop search
-            return
+            if self.urls_found == TARGET_URLS:
+                # stop search
+                return
 
         # update pointer to next found url to search
         if inc_searched:
             self.urls_searched += 1
 
         if self.urls_found == self.urls_searched:
-            print("Ran out of links to search from")
+            print("ERROR: Ran out of links to search from")
             return
 
         # search the next url in the list
