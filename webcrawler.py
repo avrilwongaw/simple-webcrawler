@@ -1,3 +1,9 @@
+#!/usr/bin/env python
+
+"""
+A Python program which takes in a starting URL and traverses all links found,
+and their links and so on, to obtain 100 unique URLs.
+"""
 
 import os
 import sys
@@ -16,7 +22,7 @@ from bs4 import BeautifulSoup, SoupStrainer
 # number of unique urls to download
 TARGET_URLS = 100
 
-# temporary directory to store html files
+# name of temp dir to store html files
 HTML_DIR = "htmls"
 
 
@@ -40,15 +46,27 @@ class SimpleWebCrawler:
         self.driver.set_page_load_timeout(20)  # in seconds
 
     def search(self):
-        # start search from start_url
-        self.search_url(self.start_url, inc_searched=False)
+        """
+        Call this function to start the URL search process from start_url.
 
-    def search_url(self, url_to_search, inc_searched=True):
-        link_soup = self.get_html_link_soup(url_to_search)
+        :return: None
+        """
+        self.__search_url(self.start_url, inc_searched=False)
+
+    def __search_url(self, url_to_search, inc_searched=True):
+        """
+        Searches the given URL for links, then recursively searches the links found
+        until TARGET_URLS number of URLs have been recorded.
+
+        :param url_to_search: Valid URL to scrape for links
+        :param inc_searched: Whether to increment url_searched
+        :return: None
+        """
+        link_soup = self.__get_html_link_soup(url_to_search)
 
         if link_soup is not None:
             # find all links in the soup
-            self.find_urls(link_soup)
+            self.__find_urls(link_soup)
 
             if self.urls_found == TARGET_URLS:
                 # stop search
@@ -63,16 +81,37 @@ class SimpleWebCrawler:
             return
 
         # search the next url in the list
-        self.search_url(self.url_array[self.urls_searched])
+        self.__search_url(self.url_array[self.urls_searched])
 
-    # Returns a file path to store html for given url
-    def get_html_fp(self, url):
+    def cleanup(self):
+        """
+        Quits the Selenium driver.
+
+        :return: None
+        """
+        self.driver.quit()
+
+    # ============= Helper methods =============
+
+    def __get_html_fp(self, url):
+        """
+        Returns a file path to store the HTML obtained from the given URL.
+
+        :param url: A valid URL
+        :return: Path object
+        """
         filename = f"{tldextract.extract(url).domain}-{self.urls_searched}.html"
         return self.html_dir / filename
 
-    # Downloads html from url to a file
-    # Returns negative int if download failed
-    def download_html(self, url, html_fp):
+    def __download_html(self, url, html_fp):
+        """
+        Uses Selenium and Firefox to download the HTML code from the given URL,
+        and writes it to html_fp.
+
+        :param url: URL to download HTML from
+        :param html_fp: Path to write HTML code to
+        :return: 0 on success, -1 if error
+        """
         try:
             # open url
             self.driver.get(url)
@@ -94,25 +133,37 @@ class SimpleWebCrawler:
 
         return 0
 
-    # Downloads html from url and returns BeautifulSoup object
-    # which is filtered to only contain <a> tags
-    def get_html_link_soup(self, url):
-        html_fp = self.get_html_fp(url)
+    def __get_html_link_soup(self, url):
+        """
+        Downloads HTML from the given URL and parses it using BeautifulSoup,
+        filtering it to leave only the <a> tags.
 
-        if self.download_html(url, html_fp) < 0:
+        :param url: URL to parse
+        :return: BeautifulSoup object
+        """
+        html_fp = self.__get_html_fp(url)
+
+        if self.__download_html(url, html_fp) < 0:
             # download failed
             return None
 
-        # create bs object
         with open(html_fp, 'r') as fp:
             site_content = fp.read()
 
-        # Only keep <a> tags
+        # create soup object
+        # only keep <a> tags
         soup = BeautifulSoup(site_content, 'html.parser', parse_only=SoupStrainer("a"))
         return soup
 
     @staticmethod
-    def get_valid_urls(link_soup):
+    def __get_valid_urls(link_soup):
+        """
+        Checks the given BeautifulSoup object for 'href' attributes containing valid URLs
+        and collates the URLs into a list. link_soup is assumed to only contain <a> tags.
+
+        :param link_soup: BeautifulSoup object containing only <a> tags
+        :return: List of valid URLs
+        """
         valid_urls = []
         for link in link_soup:
             if hasattr(link, 'href'):
@@ -125,9 +176,19 @@ class SimpleWebCrawler:
                     continue
         return valid_urls
 
-    # get all unique links and store in url_array
-    def find_urls(self, link_soup):
-        links = self.get_valid_urls(link_soup)
+    def __find_urls(self, link_soup):
+        """
+        Obtains an array of unique links from link_soup and stores them into url_array.
+        If the total number of links found exceeds TARGET_URLs, it only stores the first
+        n links needed to reach the target number, in the order they were found. Updates
+        urls_found accordingly.
+
+        link_soup is assumed to only contain <a> tags.
+
+        :param link_soup: BeautifulSoup object containing only <a> tags
+        :return: None
+        """
+        links = self.__get_valid_urls(link_soup)
         link_arr = np.array(links, dtype=object)
 
         # narrow list to unique links to be added to url_array
@@ -147,19 +208,36 @@ class SimpleWebCrawler:
             self.url_array[self.urls_found:] = rem_links
             self.urls_found = TARGET_URLS
 
-    def cleanup(self):
-        self.driver.quit()
+
+# ===========================
+#      Helper functions
+# ===========================
 
 
-# Returns the length of a single-row array
+def is_url(cand_str):
+    """
+    Returns True if cand_str is a properly-formatted URL.
+
+    :param cand_str: String
+    :return: Boolean
+    """
+    parse_result = urlparse(cand_str)
+    return parse_result.scheme != "" and parse_result.netloc != ""
+
+
 def get_np_arrlen(arr):
+    """
+    Returns the length of a 1-dimensional numpy array.
+
+    :param arr: numpy array
+    :return: int
+    """
     return arr.shape[0]
 
 
-# Returns True if cand_str is a properly-formatted url
-def is_url(cand_str):
-    parse_result = urlparse(cand_str)
-    return parse_result.scheme != "" and parse_result.netloc != ""
+# ===========================
+#        Main program
+# ===========================
 
 
 def main(url):
@@ -168,11 +246,9 @@ def main(url):
         print("Invalid url given. Please try again with a valid url.")
         sys.exit(-1)
 
-    # run webcrawler
     wc = SimpleWebCrawler(url)
     wc.search()
 
-    # print urls found
     print(f"Found {wc.urls_found} unique URLs:")
     for i, found_url in enumerate(wc.url_array):
         print(f"{i + 1}. {found_url}")
